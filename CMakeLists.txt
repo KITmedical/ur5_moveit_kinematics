@@ -105,6 +105,8 @@ include_directories(
 add_library(ur5_moveit_kinematics
   src/ur5_moveit_kinematics_plugin.cpp
 )
+# C&P from ur5_safe_cartesian/CMakeLists.txt
+set_target_properties(ur5_moveit_kinematics PROPERTIES COMPILE_DEFINITIONS "UR5_PARAMS")
 
 ## Declare a cpp executable
 # add_executable(ur5_moveit_kinematics_node src/ur5_moveit_kinematics_node.cpp)
@@ -114,8 +116,18 @@ add_library(ur5_moveit_kinematics
 # add_dependencies(ur5_moveit_kinematics_node ur5_moveit_kinematics_generate_messages_cpp)
 
 ## Specify libraries to link a library or executable target against
+# C&P from ur5_safe_cartesian/CMakeLists.txt
+# ur_kinematics adds BOTH libraries (ur5 and ur10) to catkin_LIBRARIES, fix by removing one of them
+#MESSAGE("catkin_LIBRARIES=${catkin_LIBRARIES}")
+FOREACH(item ${catkin_LIBRARIES})
+  STRING(REGEX MATCH "ur10_kin" item_matched ${item})
+  IF(NOT item_matched)
+    LIST(APPEND FILTERED_catkin_LIBRARIES ${item})
+  ENDIF(NOT item_matched)
+ENDFOREACH(item ${catkin_LIBRARIES})
+#MESSAGE("FILTERED_catkin_LIBRARIES=${FILTERED_catkin_LIBRARIES}")
 target_link_libraries(ur5_moveit_kinematics
-  ${catkin_LIBRARIES}
+  ${FILTERED_catkin_LIBRARIES}
 )
 
 #############

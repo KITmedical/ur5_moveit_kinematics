@@ -6,24 +6,136 @@
 #include <ros/ros.h>
 #include <pluginlib/class_list_macros.h>
 #include <urdf/model.h>
+#include <tf/transform_datatypes.h>
 
 // custom includes
 #include <ahbstring.h>
+#include <ur_kinematics/ur_kin.h>
 
 PLUGINLIB_EXPORT_CLASS(ur5_moveit_kinematics::UR5MoveItKinematicsPlugin, kinematics::KinematicsBase);
 
 namespace ur5_moveit_kinematics {
 
 /*---------------------------------- public: -----------------------------{{{-*/
+#define UR5_JOINTS 6
+int
+rowmajoridx(int row, int col, int numcols)
+{
+  return row * numcols + col;
+}
+
+void
+jsolprint(const double* joint_solutions, unsigned joint_solutions_count)
+{
+  printf("joint_solutions:\n");
+  for (unsigned solutionIdx = 0; solutionIdx < joint_solutions_count; solutionIdx++) {
+    printf("%d: ", solutionIdx);
+    for (unsigned jointIdx = 0; jointIdx < UR5_JOINTS; jointIdx++) {
+      printf("%2.3lf ", joint_solutions[rowmajoridx(solutionIdx,jointIdx,UR5_JOINTS)]);
+    }
+    printf("\n");
+  }
+  printf("\n");
+}
+
 bool UR5MoveItKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose,
                    const std::vector<double> &ik_seed_state,
                    std::vector<double> &solution,
                    moveit_msgs::MoveItErrorCodes &error_code,
                    const kinematics::KinematicsQueryOptions &options) const
 {
+  ROS_INFO_STREAM("ik_seed_state=" << ahb::string::toString(ik_seed_state));
+
+  // C&P from ur5_safe_cartesian/src/UR5SafeCartesian.cpp
+  tf::Pose tfpose;
+  tf::poseMsgToTF(ik_pose, tfpose);
+
+  double T[4*4];
+  for (unsigned col = 0; col < 3; col++) {
+    T[rowmajoridx(3,col,4)] = 0;
+  }
+  T[rowmajoridx(3,3,4)] = 1;
+  tf::Matrix3x3 rotationMatrix = tfpose.getBasis();
+  for (unsigned row = 0; row < 3; row++) {
+    for (unsigned col = 0; col < 3; col++) {
+       T[rowmajoridx(row,col,4)] = rotationMatrix[row][col];
+    }
+  }
+  tf::Vector3 translationVector = tfpose.getOrigin();
+  for (unsigned row = 0; row < 3; row++) {
+    T[rowmajoridx(row,3,4)] = translationVector[row];
+  }
+
+  double joint_solutions[8*6];
+  unsigned joint_solutions_count = ur_kinematics::inverse(T, joint_solutions);
+  printf("raw solutions:\n");
+  jsolprint(joint_solutions, joint_solutions_count);
+  if (joint_solutions_count == 0) {
+    ROS_ERROR_STREAM("ur_kinematics::inverse(): No solution found");
+    error_code.val = error_code.NO_IK_SOLUTION;
+    return false;
+  }
+
+  // use solution closest to current pos (in joint space)
+  int minDistSolutionIdx = -1;
+  double minDistSolution = 10e6;
+  for (unsigned solutionIdx = 0; solutionIdx < joint_solutions_count; solutionIdx++) {
+    bool validSolution = true;
+    // ur_kinematics::inverse returns angles in [0,2*PI) since all axis are +-2*PI, we want to use value of interval we are in
+    printf("joint_optimal_interval: ");
+    for (unsigned jointIdx = 0; jointIdx < UR5_JOINTS; jointIdx++) {
+      if (isnan(joint_solutions[rowmajoridx(solutionIdx,jointIdx,UR5_JOINTS)])) {
+        printf("NaN!");
+        validSolution = false;
+        break;
+      }
+      double distpos = abs(ik_seed_state[jointIdx] - joint_solutions[rowmajoridx(solutionIdx,jointIdx,UR5_JOINTS)]); 
+      double distneg = abs(ik_seed_state[jointIdx] - (joint_solutions[rowmajoridx(solutionIdx,jointIdx,UR5_JOINTS)] - 2*M_PI)); 
+      double ival;
+      if (distneg < distpos) {
+        ival = -2 * M_PI;
+      } else {
+        ival = 0;
+      }
+      joint_solutions[rowmajoridx(solutionIdx,jointIdx,UR5_JOINTS)] += ival;
+      printf("%2.3lf ", ival);
+    }
+    printf("\n");
+    if (!validSolution) {
+      continue;
+    }
+
+    double dist = 0;
+    for (unsigned jointIdx = 0; jointIdx < UR5_JOINTS; jointIdx++) {
+      double d = joint_solutions[rowmajoridx(solutionIdx,jointIdx,UR5_JOINTS)] - ik_seed_state[jointIdx];
+      while (d > M_PI) {
+        d -= 2*M_PI;
+      }
+      while (d < -M_PI) {
+        d += 2*M_PI;
+      }
+      dist += d * d;
+    }
+    printf("Solution %d dist=%lf\n", solutionIdx, dist);
+    if (dist < minDistSolution) {
+      minDistSolution = dist;
+      minDistSolutionIdx = solutionIdx;
+    }
+  }
+  if (minDistSolutionIdx == -1) {
+    ROS_ERROR_STREAM("ur_kinematics::inverse(): No minDistSolution found");
+    error_code.val = error_code.NO_IK_SOLUTION;
+    return false;
+  }
+  printf("optimal interval solutions:\n");
+  jsolprint(joint_solutions, joint_solutions_count);
+  printf("Using solution %d\n", minDistSolutionIdx);
 
   error_code.val = error_code.SUCCESS;
-  //solution = 
+  for (unsigned jointIdx = 0; jointIdx < UR5_JOINTS; jointIdx++) {
+    solution.push_back(joint_solutions[rowmajoridx(minDistSolutionIdx,jointIdx,UR5_JOINTS)]);
+  }
+  ROS_INFO_STREAM("solution=" << ahb::string::toString(solution));
 
   return true;
 }
@@ -81,9 +193,26 @@ bool UR5MoveItKinematicsPlugin::getPositionFK(const std::vector<std::string> &li
 
   // TODO ERROR if link_names != m_linkNames
 
+  double T[4*4];
+  ur_kinematics::forward(&joint_angles[0], T);
+  //tprint(T);
+  tf::Transform cartesianPose;
+  tf::Matrix3x3 rotationMatrix;
+  for (unsigned row = 0; row < 3; row++) {
+    for (unsigned col = 0; col < 3; col++) {
+       rotationMatrix[row][col] = T[rowmajoridx(row,col,4)];
+    }
+  }
+  tf::Vector3 translationVector;
+  for (unsigned row = 0; row < 3; row++) {
+    translationVector[row] = T[rowmajoridx(row,3,4)];
+  }
+  cartesianPose.setBasis(rotationMatrix);
+  cartesianPose.setOrigin(translationVector);
 
-  //geometry_msgs::Pose cartesianPose;
-  //poses.push_back(cartesianPose);
+  geometry_msgs::Pose cartesianPoseMsg;
+  tf::poseTFToMsg(cartesianPose, cartesianPoseMsg);
+  poses.push_back(cartesianPoseMsg);
 
   return true;
 }
