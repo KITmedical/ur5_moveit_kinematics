@@ -1,0 +1,7 @@
+<library path="lib/libur5_moveit_kinematics">
+  <class name="ur5_moveit_kinematics/UR5MoveItKinematicsPlugin" type="ur5_moveit_kinematics::UR5MoveItKinematicsPlugin" base_class_type="kinematics::KinematicsBase">
+    <description>
+      MoveIt Kinematics Plugin wrapper for ur_kinematics
+    </description>
+  </class>
+</library>
