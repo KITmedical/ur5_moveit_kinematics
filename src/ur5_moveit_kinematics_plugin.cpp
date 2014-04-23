@@ -249,7 +249,8 @@ bool UR5MoveItKinematicsPlugin::initialize(const std::string& robot_description,
 
     ROS_INFO_STREAM("link=" << link->name);
     m_linkNames.push_back(link->name);
-    if (link->child_joints.empty()) {
+    if (link->child_joints.empty()
+        || ahb::string::endswith(link->name, "wrist_3_link")) {
       break;
     }
     boost::shared_ptr<const urdf::Joint> joint = link->child_joints[0];
