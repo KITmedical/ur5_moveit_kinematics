@@ -68,7 +68,7 @@ bool UR5MoveItKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose
 
   double joint_solutions[8*6];
   unsigned joint_solutions_count = ur_kinematics::inverse(T, joint_solutions);
-  printf("raw solutions:\n");
+  //printf("raw solutions:\n");
   jsolprint(joint_solutions, joint_solutions_count);
   if (joint_solutions_count == 0) {
     ROS_ERROR_STREAM("ur_kinematics::inverse(): No solution found");
@@ -82,10 +82,10 @@ bool UR5MoveItKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose
   for (unsigned solutionIdx = 0; solutionIdx < joint_solutions_count; solutionIdx++) {
     bool validSolution = true;
     // ur_kinematics::inverse returns angles in [0,2*PI) since all axis are +-2*PI, we want to use value of interval we are in
-    printf("joint_optimal_interval: ");
+    //printf("joint_optimal_interval: ");
     for (unsigned jointIdx = 0; jointIdx < UR5_JOINTS; jointIdx++) {
       if (isnan(joint_solutions[rowmajoridx(solutionIdx,jointIdx,UR5_JOINTS)])) {
-        printf("NaN!");
+        //printf("NaN!");
         validSolution = false;
         break;
       }
@@ -98,9 +98,9 @@ bool UR5MoveItKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose
         ival = 0;
       }
       joint_solutions[rowmajoridx(solutionIdx,jointIdx,UR5_JOINTS)] += ival;
-      printf("%2.3lf ", ival);
+      //printf("%2.3lf ", ival);
     }
-    printf("\n");
+    //printf("\n");
     if (!validSolution) {
       continue;
     }
@@ -116,7 +116,7 @@ bool UR5MoveItKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose
       }
       dist += d * d;
     }
-    printf("Solution %d dist=%lf\n", solutionIdx, dist);
+    //printf("Solution %d dist=%lf\n", solutionIdx, dist);
     if (dist < minDistSolution) {
       minDistSolution = dist;
       minDistSolutionIdx = solutionIdx;
@@ -127,15 +127,15 @@ bool UR5MoveItKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose
     error_code.val = error_code.NO_IK_SOLUTION;
     return false;
   }
-  printf("optimal interval solutions:\n");
+  //printf("optimal interval solutions:\n");
   jsolprint(joint_solutions, joint_solutions_count);
-  printf("Using solution %d\n", minDistSolutionIdx);
+  //printf("Using solution %d\n", minDistSolutionIdx);
 
   error_code.val = error_code.SUCCESS;
   for (unsigned jointIdx = 0; jointIdx < UR5_JOINTS; jointIdx++) {
     solution.push_back(joint_solutions[rowmajoridx(minDistSolutionIdx,jointIdx,UR5_JOINTS)]);
   }
-  ROS_INFO_STREAM("solution=" << ahb::string::toString(solution));
+  //ROS_INFO_STREAM("solution=" << ahb::string::toString(solution));
 
   return true;
 }
