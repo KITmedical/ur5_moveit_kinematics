@@ -239,17 +239,12 @@ bool UR5MoveItKinematicsPlugin::initialize(const std::string& robot_description,
   }
   urdf::Model robotModel;
   robotModel.initString(robotUrdf);
-  boost::shared_ptr<const urdf::Link> link = robotModel.getRoot();
+  boost::shared_ptr<const urdf::Link> link = robotModel.getLink(base_name);
   while (true) {
-    if (link->name == base_name) {
-      ROS_INFO_STREAM("base_name found. Clearing previous links and joints.");
-      m_linkNames.clear();
-      m_jointNames.clear();
-    }
-
     ROS_INFO_STREAM("link=" << link->name);
     m_linkNames.push_back(link->name);
     if (link->child_joints.empty()
+        || ahb::string::endswith(link->name, tip_name)
         || ahb::string::endswith(link->name, "wrist_3_link")) {
       break;
     }
@@ -259,7 +254,6 @@ bool UR5MoveItKinematicsPlugin::initialize(const std::string& robot_description,
 
     link = robotModel.getLink(joint->child_link_name);
   }
-
 
   ROS_INFO_STREAM("robotModel: links=" << ahb::string::toString(m_linkNames) << " joints=" << ahb::string::toString(m_jointNames));
 
