@@ -44,7 +44,7 @@ bool UR5MoveItKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose
                    moveit_msgs::MoveItErrorCodes &error_code,
                    const kinematics::KinematicsQueryOptions &options) const
 {
-  ROS_INFO_STREAM("ik_seed_state=" << ahb::string::toString(ik_seed_state));
+  //ROS_INFO_STREAM("ik_seed_state=" << ahb::string::toString(ik_seed_state));
 
   // C&P from ur5_safe_cartesian/src/UR5SafeCartesian.cpp
   tf::Pose tfpose;
@@ -69,7 +69,7 @@ bool UR5MoveItKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose
   double joint_solutions[8*6];
   unsigned joint_solutions_count = ur_kinematics::inverse(T, joint_solutions);
   //printf("raw solutions:\n");
-  jsolprint(joint_solutions, joint_solutions_count);
+  //jsolprint(joint_solutions, joint_solutions_count);
   if (joint_solutions_count == 0) {
     ROS_ERROR_STREAM("ur_kinematics::inverse(): No solution found");
     error_code.val = error_code.NO_IK_SOLUTION;
@@ -128,7 +128,7 @@ bool UR5MoveItKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose
     return false;
   }
   //printf("optimal interval solutions:\n");
-  jsolprint(joint_solutions, joint_solutions_count);
+  //jsolprint(joint_solutions, joint_solutions_count);
   //printf("Using solution %d\n", minDistSolutionIdx);
 
   error_code.val = error_code.SUCCESS;
